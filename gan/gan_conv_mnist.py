@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 # Fitting parameters
-num_epochs = 10
+num_epochs = 5
 noise_dim = 100
 
 lr_discriminator = 0.0001
@@ -19,7 +19,7 @@ beta1_generator = 0.5
 train_data = train_data / 255
 
 # Reshape train data for batches
-batch_size = 64
+batch_size = 32
 num_batches = int(train_data.shape[0] / batch_size)
 train_data = train_data[:(batch_size * num_batches),:,:]
 
@@ -31,24 +31,20 @@ image_shape = train_data.shape[2:]
 
 # Generator model
 model_generator = keras.Sequential([
-	keras.layers.Dense(256, input_shape = (noise_dim,)),
-	keras.layers.ReLU(),
-	keras.layers.Dropout(0.5),
-#	keras.layers.BatchNormalization(),
+	keras.layers.Dense(64 * 7 * 7, input_shape = (noise_dim,)),
+	keras.layers.Reshape((7, 7, 64)),
 	
-	keras.layers.Dense(512),
-	keras.layers.ReLU(),
-	keras.layers.Dropout(0.5),
-#	keras.layers.BatchNormalization(),
+	keras.layers.Conv2DTranspose(32, kernel_size = 3, strides = 2, padding = 'same'),
+	keras.layers.BatchNormalization(),
+	keras.layers.LeakyReLU(0.01),
 	
-	keras.layers.Dense(1024),
-	keras.layers.ReLU(),
-	keras.layers.Dropout(0.5),
-#	keras.layers.BatchNormalization(),
+	keras.layers.Conv2DTranspose(16, kernel_size = 3, strides = 1, padding = 'same'),
+	keras.layers.BatchNormalization(),
+	keras.layers.LeakyReLU(0.01),
 	
-	keras.layers.Dense(np.prod(image_shape), activation = 'tanh'),
+	keras.layers.Conv2DTranspose(1, kernel_size = 3, strides = 2, padding = 'same'),
 	
-	keras.layers.Reshape(image_shape)
+	keras.layers.Activation('tanh')
 ])
 model_generator.compile(keras.optimizers.Adam(lr = lr_generator, beta_1 = beta1_generator), keras.losses.binary_crossentropy)
 
@@ -57,17 +53,19 @@ n_gen_trainable = len(model_generator.trainable_weights)
 
 # Discriminator model
 model_discriminator = keras.Sequential([
-	keras.layers.Flatten(input_shape = image_shape),
+	keras.layers.Conv2D(32, kernel_size = 3, strides = 2, padding = 'same', input_shape = image_shape),
+	keras.layers.BatchNormalization(),
+	keras.layers.LeakyReLU(0.01),
 	
-	keras.layers.Dense(1024),
+	keras.layers.Conv2D(64, kernel_size = 3, strides = 1, padding = 'same'),
+	keras.layers.BatchNormalization(),
+	keras.layers.LeakyReLU(0.01),
+	
+	keras.layers.Flatten(),
+	keras.layers.Dense(32),
 	keras.layers.ReLU(),
-	keras.layers.Dropout(0.5),
 	
-	keras.layers.Dense(512),
-	keras.layers.ReLU(),
-	keras.layers.Dropout(0.5),
-	
-	keras.layers.Dense(256),
+	keras.layers.Dense(16),
 	keras.layers.ReLU(),
 	
 	keras.layers.Dense(1, activation = 'sigmoid')
