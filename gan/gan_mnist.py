@@ -4,12 +4,11 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 # Fitting parameters
-num_epochs = 100
+num_epochs = 10
 noise_dim = 100
 
-lr_discriminator = 0.001
-lr_generator = lr_discriminator / 25
-
+lr_discriminator = 0.0001
+lr_generator = lr_discriminator / 10
 
 # Load data
 (train_data, train_labels), (test_data, test_labels) = keras.datasets.mnist.load_data()
@@ -18,7 +17,7 @@ lr_generator = lr_discriminator / 25
 train_data = train_data / 255
 
 # Reshape train data for batches
-batch_size = 128
+batch_size = 32
 num_batches = int(train_data.shape[0] / batch_size)
 train_data = train_data[:(batch_size * num_batches),:,:]
 
@@ -92,6 +91,8 @@ assert(n_disc_fixed_trainable == 0)
 
 #epoch = 1
 #asdf
+generator_mean_acc = 1
+discriminator_mean_acc = 1
 batch_order = np.arange(num_batches, dtype = int)
 for epoch in range(num_epochs):
 	loss_discriminator = np.zeros((num_batches, 2))
@@ -113,8 +114,10 @@ for epoch in range(num_epochs):
 		y_mislabeled = np.ones((batch_size * 2, 1))
 		
 		loss_generator[batch,:] = model.train_on_batch(noise, y_mislabeled)
-		
-	print ('[Discriminator :: accuracy: %f], [ Generator :: accuracy: %f]' % (np.mean(loss_discriminator[:,1]), np.mean(loss_generator[:,1])))
+    
+	generator_mean_acc = np.mean(loss_generator[:,1])
+	discriminator_mean_acc = np.mean(loss_discriminator[:,1])
+	print ('[Discriminator :: accuracy: %f], [ Generator :: accuracy: %f]' % (discriminator_mean_acc, generator_mean_acc))
 	
 	if (epoch + 1) % 1 == 0:
 		gen_noise = np.random.normal(size = (16, noise_dim))
@@ -126,5 +129,6 @@ for epoch in range(num_epochs):
 			plt.subplot(4, 4, i + 1)
 			plt.imshow(gen_samples[i,:,:,0])
 		plt.savefig('images/gan_%i.png' % (epoch + 1))
+		plt.close()
 
 # Validation
