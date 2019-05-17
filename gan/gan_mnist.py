@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 # Fitting parameters
-num_epochs = 10
+num_epochs = 500
 noise_dim = 100
 
 lr_discriminator = 0.0001
@@ -32,19 +32,19 @@ image_shape = train_data.shape[2:]
 # Generator model
 model_generator = keras.Sequential([
 	keras.layers.Dense(256, input_shape = (noise_dim,)),
-	keras.layers.ReLU(),
+	keras.layers.LeakyReLU(0.2),
+	keras.layers.BatchNormalization(),
 	keras.layers.Dropout(0.5),
-#	keras.layers.BatchNormalization(),
 	
 	keras.layers.Dense(512),
-	keras.layers.ReLU(),
+	keras.layers.LeakyReLU(0.2),
+	keras.layers.BatchNormalization(),
 	keras.layers.Dropout(0.5),
-#	keras.layers.BatchNormalization(),
 	
 	keras.layers.Dense(1024),
-	keras.layers.ReLU(),
+	keras.layers.LeakyReLU(0.2),
+	keras.layers.BatchNormalization(),
 	keras.layers.Dropout(0.5),
-#	keras.layers.BatchNormalization(),
 	
 	keras.layers.Dense(np.prod(image_shape), activation = 'tanh'),
 	
@@ -59,16 +59,16 @@ n_gen_trainable = len(model_generator.trainable_weights)
 model_discriminator = keras.Sequential([
 	keras.layers.Flatten(input_shape = image_shape),
 	
-	keras.layers.Dense(1024),
-	keras.layers.ReLU(),
-	keras.layers.Dropout(0.5),
+#	keras.layers.Dense(1024),
+#	keras.layers.LeakyReLU(0.2),
+#	keras.layers.Dropout(0.5),
 	
 	keras.layers.Dense(512),
-	keras.layers.ReLU(),
-	keras.layers.Dropout(0.5),
+	keras.layers.LeakyReLU(0.2),
+#	keras.layers.Dropout(0.5),
 	
 	keras.layers.Dense(256),
-	keras.layers.ReLU(),
+	keras.layers.LeakyReLU(0.2),
 	
 	keras.layers.Dense(1, activation = 'sigmoid')
 ])

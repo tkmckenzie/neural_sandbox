@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 # Fitting parameters
-num_epochs = 5
+num_epochs = 10
 noise_dim = 100
 
 lr_discriminator = 0.0001
