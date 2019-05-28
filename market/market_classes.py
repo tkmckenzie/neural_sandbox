@@ -3,6 +3,8 @@ import time
 
 class BankruptError(Exception):
 	pass
+class NotEvaluatedError(Exception):
+	pass
 
 class Firm:
 	# Firms need:
@@ -17,6 +19,8 @@ class Firm:
 		self.x_train = x_train
 		self.y_train = y_train
 		self.model_initialized = False
+		self.model_evaluated = False
+		self.evaluate_result = None
 	
 	def initialize_model(self, num_hidden_layers, neurons_per_layer, activations, dropout, normalization):
 		# num_hidden_layers: (int) Number of hidden layers
@@ -62,6 +66,8 @@ class Firm:
 		self.model.fit(self.x_train, self.y_train, verbose = 0)
 		t1 = time.time()
 		
+		self.model_evaluated = False
+		
 		return t1 - t0
 	
 	def evaluate(self, x, y):
@@ -71,19 +77,25 @@ class Firm:
 		
 		return {'avg_time': (t1 - t0) / x.shape[0], 'accuracy': evaluate_result[1]}
 	
-	def produce(self, x, y, units_demanded):
-		# units_demanded: (positive real) Number of units demanded by consumer
+	def set_evaluate_result(self, evaluate_result):
+		self.evaluate_result = evaluate_result
+		self.model_evaluated = True
+	
+	def get_evaluate_result(self):
+		if not self.model_evaluated:
+			raise NotEvaluatedError
+		else:
+			return self.evaluate_result
+	
+	def produce(self, consumer, other_firms):
+		evaluate_result = self.get_evaluate_result()
 		
-		if self.budget < 0: raise BankruptError
+		cost = evaluate_result['avg_time'] * consumer.units_demanded
 		
-		# Evaluate accuracy and time it takes to evaluate
-		evaluate_result = self.evaluate(x, y)
+		other_firm_accuracy = [firm.get_evaluate_result()['accuracy'] for firm in other_firms]
+		revenue = consumer.demand_i(evaluate_result['accuracy'], other_firm_accuracy)
 		
-		# Calculate total costs
-		cost = evaluate_result['avg_time'] * units_demanded
-		
-		# Return accuracy
-		return evaluate_result['accuracy']
+		self.budget += revenue - cost
 	
 	def training_decision(self, consumer, other_firms):
 		# consumer: (Consumer object) Consumer that demands output
@@ -92,28 +104,51 @@ class Firm:
 		model_weights_init = self.model.get_weights()
 		optimizer_weights_init = self.model.optimizer.get_weights()
 		
-		evaluate_result_init = self.evaluate(consumer.x_val, consumer.y_val)
+		evaluate_result_init = self.get_evaluate_result()
 		
 		if evaluate_result_init['avg_time'] * consumer.units_demanded <= self.budget:
+			# Feasibility check for current capabilities
 			training_cost = self.fit()
 			evaluate_result_post = self.evaluate(consumer.x_val, consumer.y_val)
 			
 			if training_cost + evaluate_result_post['avg_time'] * consumer.units_demanded <= self.budget:
-				other_firm_accuracy = [firm.evaluate(consumer.x_val, consumer.y_val) for firm in other_firms]
+				# Feasibility check for next iteration's capabilities
+				other_firm_accuracy = [firm.get_evaluate_result()['accuracy'] for firm in other_firms]
 				demand_init = consumer.demand_i(evaluate_result_init['accuracy'], other_firm_accuracy)
 				demand_post = consumer.demand_i(evaluate_result_post['accuracy'], other_firm_accuracy)
 				
-				if demand_post > demand_init:
-					
+				if demand_post - demand_init > training_cost:
+					# Optimality check for next iteration's capabilities
+					self.budget -= training_cost
+					self.set_evaluate_result(evaluate_result_post)
+					return True
+				else:
+					self.model.set_weights(model_weights_init)
+					self.model.optimizer.set_weights(optimizer_weights_init)
+					self.set_evaluate_result(evaluate_result_init)
+					return False
+			else:
+				self.model.set_weights(model_weights_init)
+				self.model.optimizer.set_weights(optimizer_weights_init)
+				self.set_evaluate_result(evaluate_result_init)
+				return False
+		else:
+			return False
 		
 class Consumer:
-	def __init__(self, x_val, y_val, budget, units_demanded, utility_function):
+	def __init__(self, x_val, y_val, base_budget, units_demanded, utility_function):
 		# budget: (positive real) Time available to spend per period
 		self.x_val = x_val
 		self.y_val = y_val
-		self.budget = budget
+		self.base_budget = base_budget
+		self.budget = base_budget
 		self.units_demanded = units_demanded
 		self.utility_function = utility_function
 	
 	def demand_i(self, firm_accuracy, other_firm_accuracy):
-		NotImplementedError
+		utility_i = self.utility_function(firm_accuracy)
+		utility_sum = sum(map(self.utility_function, other_firm_accuracy)) + utility_i
+		return self.budget * utility_i / utility_sum
+	
+def exclude_element(list_obj, i):
+	return list_obj[:i] + list_obj[i + 1:]
