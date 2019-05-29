@@ -6,6 +6,8 @@ import numpy as np
 num_firms = 5
 minutes_per_firm = 2
 
+num_periods = 10
+
 # Load and clean data
 (train_data, train_labels), (test_data, test_labels) = keras.datasets.mnist.load_data()
 
@@ -16,7 +18,7 @@ train_labels = keras.utils.to_categorical(train_labels)
 test_labels = keras.utils.to_categorical(test_labels)
 
 # Set up consumer object
-consumer = market_classes.Consumer(test_data, test_labels, minutes_per_firm * num_firms * 60, train_data.shape[0], lambda acc: 1 - np.sqrt(1 - acc**2))
+consumer = market_classes.Consumer(test_data, test_labels, minutes_per_firm * num_firms * 60, train_data.shape[0], lambda eval_result: 1 / (1 - eval_result['accuracy']**2))
 
 # Set up firm objects
 num_hidden_layers = [2] * num_firms
@@ -38,18 +40,22 @@ for firm in firms:
 #i = 0
 #firms[i].training_decision(consumer, market_classes.exclude_element(firms, i))
 
-# Update firms' models
-decisions = [True] * num_firms
-while any(decisions):
-	decisions = [firms[i].training_decision(consumer, market_classes.exclude_element(firms, i)) for i in range(num_firms)]
-
-print([firm.budget for firm in firms])
-print(sum([firm.budget for firm in firms]))
-
-# Produce output
-consumer.budget = consumer.base_budget + sum([firm.get_evaluate_result()['avg_time'] * consumer.units_demanded for firm in firms])
-for i in range(num_firms):
-	firms[i].produce(consumer, market_classes.exclude_element(firms, i))
-
-print([firm.budget for firm in firms])
-print(sum([firm.budget for firm in firms]))
+for period in range(num_periods):
+	print('\nPeriod', period + 1)
+	# Update firms' models
+	decisions = [True] * num_firms
+	num_updates = 0
+	while any(decisions):
+		decisions = [firms[i].training_decision(consumer, market_classes.exclude_element(firms, i)) for i in range(num_firms)]
+		print(decisions)
+		num_updates += sum(decisions)
+	
+	# Produce output
+	consumer.budget = consumer.base_budget
+	for i in range(num_firms):
+		firms[i].produce(consumer, market_classes.exclude_element(firms, i))
+	
+	
+	print('Accuracies:\n', [np.round(firm.get_evaluate_result()['accuracy'], 3) for firm in firms])
+	print('Budgets:\n', [np.round(firm.budget, 1) for firm in firms])
+	print('Updates:', num_updates)

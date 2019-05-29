@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 import time
 
 class BankruptError(Exception):
@@ -90,10 +91,13 @@ class Firm:
 	def produce(self, consumer, other_firms):
 		evaluate_result = self.get_evaluate_result()
 		
-		cost = evaluate_result['avg_time'] * consumer.units_demanded
+		units_produced = min(consumer.units_demanded, self.budget / evaluate_result['avg_time'])
 		
-		other_firm_accuracy = [firm.get_evaluate_result()['accuracy'] for firm in other_firms]
-		revenue = consumer.demand_i(evaluate_result['accuracy'], other_firm_accuracy)
+		cost = evaluate_result['avg_time'] * units_produced
+		evaluate_result['accuracy'] *= units_produced / consumer.units_demanded
+		
+		other_firms_evaluate_results = [firm.get_evaluate_result() for firm in other_firms]
+		revenue = consumer.demand_i(evaluate_result, other_firms_evaluate_results)
 		
 		self.budget += revenue - cost
 	
@@ -110,12 +114,12 @@ class Firm:
 			# Feasibility check for current capabilities
 			training_cost = self.fit()
 			evaluate_result_post = self.evaluate(consumer.x_val, consumer.y_val)
+			other_firms_evaluate_results = [other_firm.get_evaluate_result() for other_firm in other_firms]
 			
 			if training_cost + evaluate_result_post['avg_time'] * consumer.units_demanded <= self.budget:
 				# Feasibility check for next iteration's capabilities
-				other_firm_accuracy = [firm.get_evaluate_result()['accuracy'] for firm in other_firms]
-				demand_init = consumer.demand_i(evaluate_result_init['accuracy'], other_firm_accuracy)
-				demand_post = consumer.demand_i(evaluate_result_post['accuracy'], other_firm_accuracy)
+				demand_init = consumer.demand_i(evaluate_result_init, other_firms_evaluate_results)
+				demand_post = consumer.demand_i(evaluate_result_post, other_firms_evaluate_results)
 				
 				if demand_post - demand_init > training_cost:
 					# Optimality check for next iteration's capabilities
@@ -145,9 +149,24 @@ class Consumer:
 		self.units_demanded = units_demanded
 		self.utility_function = utility_function
 	
-	def demand_i(self, firm_accuracy, other_firm_accuracy):
-		utility_i = self.utility_function(firm_accuracy)
-		utility_sum = sum(map(self.utility_function, other_firm_accuracy)) + utility_i
+	def demand_i(self, firm_evaluate_result, other_firms_evaluate_results):
+		utility_i = self.utility_function(firm_evaluate_result)
+		utility_all = np.array([utility_i] + list(map(self.utility_function, other_firms_evaluate_results)))
+		
+		utility_min = min(utility_all)
+		utility_sum = sum(utility_all)
+		
+		p = 0.1 # Minimum proportion of budget paid out (to worst performing firm)
+		N = len(utility_all)
+		c = (utility_sum - N * utility_min) * p / (1 - N * p)
+		
+		offset = utility_min - c
+		
+		utility_i -= offset
+		utility_all -= offset
+		
+		utility_sum = sum(utility_all)
+		
 		return self.budget * utility_i / utility_sum
 	
 def exclude_element(list_obj, i):
